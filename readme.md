@@ -1,4 +1,4 @@
-# Topic Classification – SRIP Task
+# Topic Classification
 
 ### Made by Aryan Kumar, 24110055
 
@@ -145,13 +145,5 @@ pip install -r requirements.txt
 * Fixed random seeds
 * Deterministic pipeline
 * End-to-end execution supported
-
----
-
-## Notes
-
-* Designed to handle large-scale data efficiently
-* Uses classical ML models (no pretrained models as per constraints)
-* Modular code for easy experimentation
 
 ---
