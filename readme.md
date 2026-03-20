@@ -1,104 +1,143 @@
-# Topic Classification – SRIP Task
-
-### Made by Aryan Kumar, 24110055
-
-## Overview
-
-This project implements a scalable pipeline to classify text into predefined topics using a large dataset (~4GB, 10 million rows). The focus is on efficient data handling, strong baseline models, and reproducibility.
-
----
+# Topic Classification 
+Multi-class text topic classifier trained from scratch on 10M rows across 24 topic categories.
 
 ## Project Structure
 
-```bash
+```
 project/
-│── src/
-│   ├── train.py
-│   ├── inference.py
-│   ├── model.py
-│   └── utils.py
-│
-│── experiments/
-│── final_models/
-│
-│── report.pdf
-│── requirements.txt
-│── README.md
+├── src/
+│   ├── train.py              # Full training pipeline
+│   ├── inference.py          # Inference: single text, batch, or CSV
+│   ├── model.py              # TextCNN architecture
+│   └── utils.py              # Data loading, vocabulary, preprocessing
+├── experiments/              # Logs, configs, checkpoints per experiment
+│   ├──eda.ipynb
+├── final_models/
+│   └── final_model       # Best model checkpoint
+├── report.pdf
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
 ## Setup Instructions
 
-### 1. Clone Repository
+### 1. Environment
 
-```bash
-git clone <repo-link>
-cd project
-```
-
-### 2. Create Environment
+Python 3.10+ recommended. Create a virtual environment:
 
 ```bash
 python -m venv venv
-
-# Activate
-source venv/bin/activate      # Linux/Mac
-venv\Scripts\activate         # Windows
+# Windows
+venv\Scripts\activate
+# Linux / macOS
+source venv/bin/activate
 ```
 
-### 3. Install Dependencies
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
+### 3. GPU Support (recommended)
 
-## Dataset
-
-* Format: Parquet
-* Size: ~4GB
-* Rows: ~10 million
-* Columns:
-
-  * `DATA`: Input text
-  * `TOPIC`: Label
-
-⚠️ The dataset is processed using chunking/lazy loading to avoid memory issues.
-
----
-
-## Training
-
-Run:
+If you have an NVIDIA GPU, install PyTorch with CUDA:
 
 ```bash
-python src/train.py
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
-What it does:
+Verify GPU is available:
 
-* Loads data in chunks
-* Preprocesses text
-* Converts text → TF-IDF features
-* Trains model
-* Saves trained model to `final_models/`
+```python
+import torch
+print(torch.cuda.is_available())   # True
+print(torch.cuda.get_device_name(0))
+```
 
 ---
 
-## Inference
+## Training Instructions
 
-Run:
+### Quick Start (subset, for experimentation)
 
 ```bash
-python src/inference.py --input "Your text here"
+python src/train.py \
+  --data path/to/dataset_10M.parquet \
+  --n_per_class 20000 \
+  --epochs 20 \
+  --batch_size 256 \
+  --output final_models/textcnn_best.pt
+```
+
+### Full Dataset Training
+
+```bash
+python src/train.py \
+  --data path/to/dataset_10M.parquet \
+  --n_per_class 100000 \
+  --epochs 15 \
+  --batch_size 256 \
+  --output final_models/textcnn_best.pt
+```
+
+### Key Hyperparameters
+
+| Parameter | Default | Description |
+|---|---|---|
+| `--n_per_class` | 20000 | Rows per class to load |
+| `--epochs` | 20 | Max training epochs |
+| `--batch_size` | 256 | Training batch size |
+| `--embed_dim` | 128 | Embedding dimension |
+| `--num_filters` | 128 | Conv filters per kernel size |
+| `--max_seq_len` | 256 | Max token length per document |
+| `--lr` | 1e-3 | Initial learning rate |
+| `--seed` | 42 | Random seed |
+
+---
+
+## Inference Instructions
+
+### Single Text
+
+```bash
+python src/inference.py \
+  --model final_models/textcnn_best.pt \
+  --text "The stock market rallied today after the Fed announced a rate cut"
 ```
 
 Output:
+```
+Predicted topic : finance_and_business
+Confidence      : 0.9341
+```
+
+### Top-K Predictions
 
 ```bash
-Predicted Topic: <label>
+python src/inference.py \
+  --model final_models/textcnn_best.pt \
+  --text "Arsenal beat Manchester City 2-1 in the Premier League" \
+  --topk 3
+```
+
+Output:
+```
+Top predictions:
+  sports_and_fitness                  0.9512
+  entertainment                       0.0231
+  politics                            0.0087
+```
+
+### Batch CSV Inference
+
+```bash
+python src/inference.py \
+  --model final_models/textcnn_best.pt \
+  --file input.csv \
+  --output predictions.csv
 ```
 
 ---
@@ -107,51 +146,49 @@ Predicted Topic: <label>
 
 ### Input
 
-```json
-{
-  "DATA": "Sample input text"
-}
-```
+| Field | Type | Description |
+|---|---|---|
+| `DATA` | string | Raw text to classify (any length) |
 
 ### Output
 
-```json
-{
-  "TOPIC": "Predicted label"
-}
+| Field | Type | Description |
+|---|---|---|
+| `PREDICTED_TOPIC` | string | Predicted class label |
+| `CONFIDENCE` | float | Softmax probability of predicted class (0–1) |
+
+### Supported Topic Labels
+
 ```
-
----
-
-## Dependencies
-
-Main libraries used:
-
-* numpy
-* pandas
-* scikit-learn
-* pyarrow / dask
-
-Install via:
-
-```bash
-pip install -r requirements.txt
+adult_content, art_and_design, crime_and_law, education_and_jobs,
+electronics_and_hardare, entertainment, fashion_and_beauty,
+finance_and_business, food_and_dining, games, health,
+history_and_geography, home_and_hobbies, industrial, literature,
+politics, religion, science_math_and_technology, social_life,
+software, software_development, sports_and_fitness,
+transportation, travel_and_tourism
 ```
 
 ---
 
 ## Reproducibility
 
-* Fixed random seeds
-* Deterministic pipeline
-* End-to-end execution supported
+- All random seeds fixed at 42 (Python, NumPy, PyTorch)
+- Stratified train/test split (80/20)
+- Vocabulary built from training set only (no data leakage)
+- Model checkpoint saves best validation accuracy
 
 ---
 
-## Notes
+## Requirements
 
-* Designed to handle large-scale data efficiently
-* Uses classical ML models (no pretrained models as per constraints)
-* Modular code for easy experimentation
+See `requirements.txt`. Core dependencies:
 
----
+```
+torch>=2.0.0
+pandas>=2.0.0
+pyarrow>=12.0.0
+scikit-learn>=1.3.0
+numpy>=1.24.0
+reportlab>=4.0.0
+```
