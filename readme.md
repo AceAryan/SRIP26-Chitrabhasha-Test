@@ -1,4 +1,4 @@
-# Topic Classification 
+# Topic Classification — SRIP 2026
 
 Multi-class text topic classifier trained from scratch on 10M rows across 24 topic categories.
 Final model: **TF-IDF + Logistic Regression** (83–89% accuracy depending on data size).
@@ -11,7 +11,11 @@ project/
 │   ├── train.py              # TF-IDF + LogReg training pipeline (final model)
 │   └── inference.py          # Inference: single text, top-k, or batch CSV
 ├── experiments/              # All experimental scripts
-│   ├── eda.ipynb             # Contains all the EDA done and Tested Models
+│   ├── exp1_tfidf_logreg.py  # Experiment 1 — baseline (5K per class)
+│   ├── exp2_fasttext_v1.py   # Experiment 2a — FastText V1
+│   ├── exp2_fasttext_v2.py   # Experiment 2b — FastText V2 (improved)
+│   ├── exp3_linear_svm.py    # Experiment 3 — Linear SVM
+│   └── exp4_textcnn.py       # Experiment 4 — TextCNN (deep learning)
 ├── final_models/
 │   └── tfidf_logreg_final.pkl  # Saved model bundle (vectorizer + classifier)
 ├── report.pdf
