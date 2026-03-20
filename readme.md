@@ -11,13 +11,9 @@ project/
 │   ├── model.py              # TextCNN architecture
 │   └── utils.py              # Data loading, vocabulary, preprocessing
 ├── experiments/              # Logs, configs, checkpoints per experiment
-│   ├── exp1_tfidf_logreg.py
-│   ├── exp2_fasttext_v1.py
-│   ├── exp2_fasttext_v2.py
-│   ├── exp3_linear_svm.py
-│   └── exp4_textcnn.py
+│   ├──eda.ipynb
 ├── final_models/
-│   └── textcnn_best.pt       # Best model checkpoint
+│   └── final_model       # Best model checkpoint
 ├── report.pdf
 ├── requirements.txt
 └── README.md
