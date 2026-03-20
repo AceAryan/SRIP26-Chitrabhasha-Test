@@ -1,0 +1,124 @@
+# TF-IDF + LogReg
+
+import pyarrow.parquet as pq
+import pandas as pd
+import numpy as np
+import time
+import os
+import pickle
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
+
+SEED = 42
+np.random.seed(SEED)
+os.makedirs("final_models", exist_ok=True)
+
+DATA_PATH = r"D:\IIT Gandhinagar\SRIP 26\Mayank Singh\dataset_10M.parquet"
+
+# ── 0. Data loader ────────────────────────────────────────────────
+def load_stratified_subset(path, n_per_class=5000, seed=42):
+    pf = pq.ParquetFile(path)
+    chunks = []
+    for batch in pf.iter_batches(batch_size=100_000, columns=["DATA", "TOPIC"]):
+        chunk = batch.to_pandas()
+        sampled_groups = []
+        for topic, group in chunk.groupby("TOPIC"):
+            n = min(len(group), 500)
+            sampled_groups.append(group.sample(n, random_state=seed))
+        chunks.append(pd.concat(sampled_groups, ignore_index=True))
+    df = pd.concat(chunks, ignore_index=True)
+    final_groups = []
+    for topic, group in df.groupby("TOPIC"):
+        n = min(len(group), n_per_class)
+        final_groups.append(group.sample(n, random_state=seed))
+    return pd.concat(final_groups, ignore_index=True)
+
+# ── 1. Load large subset ──────────────────────────────────────────
+print("Loading data (50K per class = 1.2M rows)...")
+t0     = time.time()
+subset = load_stratified_subset(DATA_PATH, n_per_class=50000)
+print(f"Loaded {len(subset):,} rows in {time.time()-t0:.1f}s")
+print(subset["TOPIC"].value_counts())
+
+X_train, X_test, y_train, y_test = train_test_split(
+    subset["DATA"], subset["TOPIC"],
+    test_size=0.2, random_state=SEED,
+    stratify=subset["TOPIC"]
+)
+print(f"\nTrain: {len(X_train):,}  |  Test: {len(X_test):,}")
+
+# ── 2. TF-IDF ─────────────────────────────────────────────────────
+print("\nFitting TF-IDF...")
+t0 = time.time()
+vectorizer = TfidfVectorizer(
+    max_features=150_000,   # larger vocab for more data
+    sublinear_tf=True,
+    ngram_range=(1, 2),
+    min_df=5,               # slightly higher min_df for 1.2M rows
+    strip_accents="unicode",
+    analyzer="word",
+)
+X_train_tfidf = vectorizer.fit_transform(X_train)
+X_test_tfidf  = vectorizer.transform(X_test)
+print(f"Done in {time.time()-t0:.1f}s | shape: {X_train_tfidf.shape}")
+
+# ── 3. Train ──────────────────────────────────────────────────────
+print("\nTraining Logistic Regression...")
+t0 = time.time()
+clf = LogisticRegression(
+    max_iter=1000,
+    C=5.0,
+    solver="saga",
+    n_jobs=-1,
+    random_state=SEED,
+)
+clf.fit(X_train_tfidf, y_train)
+print(f"Done in {time.time()-t0:.1f}s")
+
+# ── 4. Evaluate ───────────────────────────────────────────────────
+y_pred = clf.predict(X_test_tfidf)
+acc    = accuracy_score(y_test, y_pred)
+print(f"\nAccuracy : {acc:.4f}")
+print(classification_report(y_test, y_pred, digits=3))
+
+# ── 5. Save ───────────────────────────────────────────────────────
+bundle = {
+    "vectorizer":  vectorizer,
+    "classifier":  clf,
+    "label_names": sorted(subset["TOPIC"].unique().tolist()),
+    "config": {
+        "max_features": 150_000,
+        "ngram_range":  (1, 2),
+        "sublinear_tf": True,
+        "min_df":       5,
+        "C":            5.0,
+        "solver":       "saga",
+        "n_per_class":  50000,
+        "accuracy":     round(acc, 4),
+    }
+}
+save_path = "final_models/tfidf_logreg_final.pkl"
+with open(save_path, "wb") as f:
+    pickle.dump(bundle, f)
+
+size_mb = os.path.getsize(save_path) / 1e6
+print(f"\nSaved to {save_path}  ({size_mb:.1f} MB)")
+
+# ── 6. Sanity check ───────────────────────────────────────────────
+print("\nSanity check on sample texts:")
+test_texts = [
+    "The stock market crashed after the Fed raised interest rates",
+    "Manchester United won the Premier League title last night",
+    "Python decorators are a powerful feature for metaprogramming",
+    "The Eiffel Tower was built in 1889 and stands 330 meters tall",
+    "Grilled salmon with lemon butter sauce served with roasted vegetables",
+    "NASA launched a new telescope to study distant galaxies",
+]
+X_new  = bundle["vectorizer"].transform(test_texts)
+preds  = bundle["classifier"].predict(X_new)
+probs  = bundle["classifier"].predict_proba(X_new).max(axis=1)
+
+for text, pred, prob in zip(test_texts, preds, probs):
+    print(f"  [{pred:<35}] {prob:.3f}  —  {text[:55]}")
